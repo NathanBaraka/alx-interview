@@ -3,46 +3,52 @@ import sys
 import re
 from signal import signal, SIGINT
 
-# Initialize counters and data structures
-total_file_size = 0
-status_code_count = {str(code): 0 for code in [200, 301, 400, 401, 403, 404, 405, 500]}
-line_count = 0
-
-# Regular expression to match log entry format
+# Regular expression to match the log format
 log_pattern = re.compile(
-    r'^\S+ - \[\S+ \S+\] "GET /projects/260 HTTP/1.1" (\d{3}) (\d+)$'
+    r'^(?P<ip>\S+) - \[(?P<date>.+)\] "GET /projects/260 HTTP/1.1" '
+    r'(?P<status_code>\d{3}) (?P<file_size>\d+)$'
 )
 
-def print_stats():
-    """Function to print accumulated statistics."""
-    print(f"File size: {total_file_size}")
-    for code in sorted(status_code_count.keys()):
-        if status_code_count[code] > 0:
-            print(f"{code}: {status_code_count[code]}")
+# Initialize global variables
+total_size = 0
+status_counts = {
+    200: 0, 301: 0, 400: 0, 401: 0, 403: 0, 404: 0, 405: 0, 500: 0
+}
+line_count = 0
 
-def handle_interrupt(signal_received, frame):
-    """Handle CTRL + C signal to print stats before exiting."""
+
+def handle_interrupt(signal, frame):
+    """Handles keyboard interrupt signal (CTRL + C)."""
     print_stats()
     sys.exit(0)
 
-# Register signal handler for CTRL + C
+
+def print_stats():
+    """Prints the current statistics."""
+    global total_size, status_counts
+    print(f"File size: {total_size}")
+    for code in sorted(status_counts.keys()):
+        if status_counts[code] > 0:
+            print(f"{code}: {status_counts[code]}")
+
+
+# Register signal handler for keyboard interrupt
 signal(SIGINT, handle_interrupt)
 
-# Process input lines from stdin
 for line in sys.stdin:
     match = log_pattern.match(line.strip())
     if match:
-        status_code, file_size = match.groups()
-        # Update file size and status code count
-        total_file_size += int(file_size)
-        if status_code in status_code_count:
-            status_code_count[status_code] += 1
-    line_count += 1
+        status_code = int(match.group('status_code'))
+        file_size = int(match.group('file_size'))
 
-    # Print statistics every 10 lines
-    if line_count % 10 == 0:
-        print_stats()
+        total_size += file_size
+        if status_code in status_counts:
+            status_counts[status_code] += 1
 
-# Print final statistics if EOF is reached
+        line_count += 1
+
+        # Print statistics every 10 lines
+        if line_count % 10 == 0:
+            print_stats()
+
 print_stats()
-
